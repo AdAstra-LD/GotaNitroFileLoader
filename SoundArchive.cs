@@ -95,6 +95,22 @@ namespace NitroFileLoader {
         /// </summary>
         public List<StreamInfo> Streams = new List<StreamInfo>();
 
+
+
+
+        /// <summary>
+        /// Offsets/sizes read from the FAT block (in the same order as the FILE entries).
+        /// Each tuple is (offset, size).
+        /// Offsets are relative to the start of the FILE block in the outer SDAT file.
+        /// </summary>
+        public List<(uint offset, uint size)> FileTable = new List<(uint offset, uint size)>();
+
+        /// <summary>
+        /// Absolute offset of the FILE block (from file start) as read from the SDAT header.
+        /// </summary>
+        public long FileBlockOffset = 0;
+
+
         /// <summary>
         /// Save symbol block.
         /// </summary>
@@ -213,6 +229,13 @@ namespace NitroFileLoader {
                 fileOffs.Add((r.ReadUInt32(), r.ReadUInt32()));
                 r.ReadUInt64();
             }
+
+            // record the FILE block absolute offset from the header
+            FileBlockOffset = header.BlockOffsets.Length > 3 ? header.BlockOffsets[3] : header.BlockOffsets[2];
+
+            // save the FAT table for later use
+            FileTable = fileOffs;
+
 
             //Info block.
             r.OpenBlock(header.BlockOffsets.Length > 3 ? 1 : 0, out _, out _, false);
@@ -448,6 +471,48 @@ namespace NitroFileLoader {
             }
 
         }
+
+        /// <summary>
+        /// Returns the absolute offset (from the start of the SDAT file) of the wave-archive file
+        /// corresponding to the given wave-archive index (0-based, index into WaveArchives).
+        /// </summary>
+        public long GetWaveArchiveAbsoluteOffset(int idx) {
+            // This is the file id stored in the info table: index into the FAT/FILE entries.
+            uint readingFileId = WaveArchives[idx].ReadingFileId;
+
+            // offsets in FileTable are relative to the start of the FILE block:
+            // absolute offset = FILE block absolute offset + per-file offset
+            return FileTable[(int)readingFileId].offset;
+        }
+
+        /// <summary>
+        /// Returns the absolute offset (from the start of the SDAT file) of the bank file
+        /// corresponding to the given wave-archive index (0-based, index into Banks).
+        /// </summary>
+        public long GetBankAbsoluteOffset(int idx) {
+            // This is the file id stored in the info table: index into the FAT/FILE entries.
+            uint readingFileId = Banks[idx].ReadingFileId;
+
+            // offsets in FileTable are relative to the start of the FILE block:
+            // absolute offset = FILE block absolute offset + per-file offset
+            return FileTable[(int)readingFileId].offset;
+        }
+
+        /// <summary>
+        /// Returns the absolute offset (from the start of the SDAT file) of the sequence file
+        /// corresponding to the given wave-archive index (0-based, index into Sequences).
+        /// </summary>
+        public long GetSequenceAbsoluteOffset(int idx) {
+            // This is the file id stored in the info table: index into the FAT/FILE entries.
+            uint readingFileId = Sequences[idx].ReadingFileId;
+
+            // offsets in FileTable are relative to the start of the FILE block:
+            // absolute offset = FILE block absolute offset + per-file offset
+            return FileTable[(int)readingFileId].offset;
+        }
+
+
+
 
         /// <summary>
         /// Write the file.

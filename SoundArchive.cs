@@ -1,12 +1,13 @@
-﻿using GotaSoundIO;
-using GotaSoundIO.IO;
-using GotaSoundIO.Sound;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
+using GotaSoundIO;
+using GotaSoundIO.IO;
+using GotaSoundIO.Sound;
 
 namespace NitroFileLoader {
 
@@ -117,15 +118,37 @@ namespace NitroFileLoader {
         public bool SaveSymbols = true;
 
         /// <summary>
+        /// Lite read mode. (Ignores some data, but makes the object not writeable.)
+        /// </summary>
+        public bool LiteMode = false;
+
+        /// <summary>
         /// Blank constructor.
         /// </summary>
-        public SoundArchive() {}
+        public SoundArchive() : this(false) { }
+
+        
+        public SoundArchive(bool liteMode = false) {
+            SetLiteStatus(liteMode);
+        }
+
 
         /// <summary>
         /// Create a sound archive from a file.
         /// </summary>
         /// <param name="filePath">The file path.</param>
-        public SoundArchive(string filePath) : base(filePath) {}
+        public SoundArchive(string filePath, bool liteMode = false) : base(filePath) {
+            SetLiteStatus(liteMode);
+        }
+
+        private void SetLiteStatus(bool liteMode) {
+            this.LiteMode = liteMode;
+            if (liteMode) {
+                this.SaveSymbols = false;
+            }
+        }
+
+
 
         /// <summary>
         /// Read the file.
@@ -149,74 +172,77 @@ namespace NitroFileLoader {
 
             //Symbol block.
             if (header.BlockOffsets.Length > 3) {
-
-                //Save symbols.
-                SaveSymbols = true;
-
                 //Block header.
                 r.OpenBlock(0, out _, out _, false);
                 r.ReadUInt64();
 
-                //Get offsets.
-                r.OpenOffset("seqNames");
-                r.OpenOffset("seqArcNames");
-                r.OpenOffset("bankNames");
-                r.OpenOffset("warNames");
-                r.OpenOffset("playerNames");
-                r.OpenOffset("groupNames");
-                r.OpenOffset("streamPlayerNames");
-                r.OpenOffset("streamNames");
+                if (!LiteMode) {
+                    //Save symbols.
+                    SaveSymbols = true;
 
-                //Read name data.
-                List<string> ReadNameData(string name) {
-                    List<string> s = new List<string>();
-                    r.JumpToOffset(name);
-                    var nameOffs = r.Read<Table<uint>>();
-                    foreach (var u in nameOffs) {
-                        if (u == 0) {
-                            s.Add(null);
+
+
+                    //Get offsets.
+                    r.OpenOffset("seqNames");
+                    r.OpenOffset("seqArcNames");
+                    r.OpenOffset("bankNames");
+                    r.OpenOffset("warNames");
+                    r.OpenOffset("playerNames");
+                    r.OpenOffset("groupNames");
+                    r.OpenOffset("streamPlayerNames");
+                    r.OpenOffset("streamNames");
+
+                    //Read name data.
+                    List<string> ReadNameData(string name) {
+                        List<string> s = new List<string>();
+                        r.JumpToOffset(name);
+                        var nameOffs = r.Read<Table<uint>>();
+                        foreach (var u in nameOffs) {
+                            if (u == 0) {
+                                s.Add(null);
+                            } else {
+                                r.Jump(u);
+                                s.Add(r.ReadNullTerminated());
+                            }
+                        }
+                        return s;
+                    }
+
+                    //Read stuff.
+                    seqNames = ReadNameData("seqNames");
+                    bankNames = ReadNameData("bankNames");
+                    warNames = ReadNameData("warNames");
+                    playerNames = ReadNameData("playerNames");
+                    groupNames = ReadNameData("groupNames");
+                    streamPlayerNames = ReadNameData("streamPlayerNames");
+                    streamNames = ReadNameData("streamNames");
+
+                    //Sequence archives.
+                    r.JumpToOffset("seqArcNames");
+                    uint numSeqArcs = r.ReadUInt32();
+                    for (uint i = 0; i < numSeqArcs; i++) {
+                        r.OpenOffset("seqArcName" + i);
+                        r.OpenOffset("seqArcSequenceNames" + i);
+                    }
+
+                    //Read sequence archive names.
+                    for (uint i = 0; i < numSeqArcs; i++) {
+                        if (r.OffsetNull("seqArcName" + i)) {
+                            seqArcNames.Add(null);
                         } else {
-                            r.Jump(u);
-                            s.Add(r.ReadNullTerminated());
+                            r.JumpToOffset("seqArcName" + i);
+                            seqArcNames.Add(r.ReadNullTerminated());
+                        }
+                        if (r.OffsetNull("seqArcSequenceNames" + i)) {
+                            seqArcSequenceNames.Add(null);
+                        } else {
+                            seqArcSequenceNames.Add(ReadNameData("seqArcSequenceNames" + i));
                         }
                     }
-                    return s;
+
+                } else {
+                    SaveSymbols = false;
                 }
-
-                //Read stuff.
-                seqNames = ReadNameData("seqNames");
-                bankNames = ReadNameData("bankNames");
-                warNames = ReadNameData("warNames");
-                playerNames = ReadNameData("playerNames");
-                groupNames = ReadNameData("groupNames");
-                streamPlayerNames = ReadNameData("streamPlayerNames");
-                streamNames = ReadNameData("streamNames");
-
-                //Sequence archives.
-                r.JumpToOffset("seqArcNames");
-                uint numSeqArcs = r.ReadUInt32();
-                for (uint i = 0; i < numSeqArcs; i++) {
-                    r.OpenOffset("seqArcName" + i);
-                    r.OpenOffset("seqArcSequenceNames" + i);
-                }
-
-                //Read sequence archive names.
-                for (uint i = 0; i < numSeqArcs; i++) {
-                    if (r.OffsetNull("seqArcName" + i)) {
-                        seqArcNames.Add(null);
-                    } else {
-                        r.JumpToOffset("seqArcName" + i);
-                        seqArcNames.Add(r.ReadNullTerminated());
-                    }
-                    if (r.OffsetNull("seqArcSequenceNames" + i)) {
-                        seqArcSequenceNames.Add(null);
-                    } else {
-                        seqArcSequenceNames.Add(ReadNameData("seqArcSequenceNames" + i));
-                    }
-                }
-
-            } else {
-                SaveSymbols = false;
             }
 
             //FAT block.
@@ -262,32 +288,42 @@ namespace NitroFileLoader {
             //Keep track of MD5Sums and unique IDs.
             Dictionary<string, List<uint>> md5Ids = new Dictionary<string, List<uint>>();
 
+
+            Table<uint> offs;
+            int ind;
+
             //Read player info.
             r.JumpToOffset("playerInfo");
-            var offs = r.Read<Table<uint>>();
-            int ind = 0;
-            foreach (var o in offs) {
-                if (o != 0) {
-                    r.Jump(o);
-                    Players.Add(r.Read<PlayerInfo>());
-                    Players.Last().Index = ind;
-                    Players.Last().Name = ind > (playerNames.Count - 1) ? "PLAYER_" + ind : playerNames[ind];
+            offs = r.Read<Table<uint>>();
+
+            if (!LiteMode) {
+                ind = 0;
+                foreach (var o in offs) {
+                    if (o != 0) {
+                        r.Jump(o);
+                        Players.Add(r.Read<PlayerInfo>());
+                        Players.Last().Index = ind;
+                        Players.Last().Name = ind > (playerNames.Count - 1) ? "PLAYER_" + ind : playerNames[ind];
+                    }
+                    ind++;
                 }
-                ind++;
             }
 
             //Read stream player info.
             r.JumpToOffset("streamPlayerInfo");
             offs = r.Read<Table<uint>>();
-            ind = 0;
-            foreach (var o in offs) {
-                if (o != 0) {
-                    r.Jump(o);
-                    StreamPlayers.Add(r.Read<StreamPlayerInfo>());
-                    StreamPlayers.Last().Index = ind;
-                    StreamPlayers.Last().Name = ind > (streamPlayerNames.Count - 1) ? "STRM_PLAYER_" + ind : streamPlayerNames[ind];
+
+            if (!LiteMode) {
+                ind = 0;
+                foreach (var o in offs) {
+                    if (o != 0) {
+                        r.Jump(o);
+                        StreamPlayers.Add(r.Read<StreamPlayerInfo>());
+                        StreamPlayers.Last().Index = ind;
+                        StreamPlayers.Last().Name = ind > (streamPlayerNames.Count - 1) ? "STRM_PLAYER_" + ind : streamPlayerNames[ind];
+                    }
+                    ind++;
                 }
-                ind++;
             }
 
             //Read wave archive info.
@@ -374,102 +410,109 @@ namespace NitroFileLoader {
             //Read stream info.
             r.JumpToOffset("streamInfo");
             offs = r.Read<Table<uint>>();
-            ind = 0;
-            foreach (var o in offs) {
-                if (o != 0) {
-                    r.Jump(o);
-                    Streams.Add(r.Read<StreamInfo>());
-                    Streams.Last().Index = ind;
-                    Streams.Last().Name = ind > (streamNames.Count - 1) ? "STRM_" + ind : streamNames[ind];
-                    r.Jump(fileOffs[(int)Streams.Last().ReadingFileId].offset, true);
-                    Streams.Last().File = r.ReadFile<Stream>() as Stream;
-                    Streams.Last().Player = StreamPlayers.Where(x => x.Index == Streams.Last().ReadingPlayerId).FirstOrDefault();
-                    string md5 = Streams.Last().File.Md5Sum;
-                    if (md5Ids.ContainsKey(md5)) {
-                        if (!md5Ids[md5].Contains(Streams.Last().ReadingFileId)) {
-                            Streams.Last().ForceIndividualFile = true;
+            if (!LiteMode) {
+                ind = 0;
+                foreach (var o in offs) {
+                    if (o != 0) {
+                        r.Jump(o);
+                        Streams.Add(r.Read<StreamInfo>());
+                        Streams.Last().Index = ind;
+                        Streams.Last().Name = ind > (streamNames.Count - 1) ? "STRM_" + ind : streamNames[ind];
+                        r.Jump(fileOffs[(int)Streams.Last().ReadingFileId].offset, true);
+                        Streams.Last().File = r.ReadFile<Stream>() as Stream;
+                        Streams.Last().Player = StreamPlayers.Where(x => x.Index == Streams.Last().ReadingPlayerId).FirstOrDefault();
+                        string md5 = Streams.Last().File.Md5Sum;
+                        if (md5Ids.ContainsKey(md5)) {
+                            if (!md5Ids[md5].Contains(Streams.Last().ReadingFileId)) {
+                                Streams.Last().ForceIndividualFile = true;
+                            }
+                        } else {
+                            md5Ids.Add(md5, new List<uint>() { Streams.Last().ReadingFileId });
                         }
-                    } else {
-                        md5Ids.Add(md5, new List<uint>() { Streams.Last().ReadingFileId });
                     }
+                    ind++;
                 }
-                ind++;
             }
 
             //Read sequence archive info.
             r.JumpToOffset("seqArcInfo");
             offs = r.Read<Table<uint>>();
-            ind = 0;
-            foreach (var o in offs) {
-                if (o != 0) {
-                    r.Jump(o);
-                    SequenceArchives.Add(r.Read<SequenceArchiveInfo>());
-                    SequenceArchives.Last().Index = ind;
-                    SequenceArchives.Last().Name = ind > (seqArcNames.Count - 1) ? "SEQARC_" + ind : seqArcNames[ind];
-                    r.Jump(fileOffs[(int)SequenceArchives.Last().ReadingFileId].offset, true);
-                    SequenceArchives.Last().File = r.ReadFile<SequenceArchive>();
-                    var labels = SequenceArchives.Last().File.Labels;
-                    SequenceArchives.Last().File.Labels = new Dictionary<string, uint>();
-                    
-                    if (SequenceArchives.Last().File.Sequences.Count > 0) {
-                        int seqNum = 0;
-                        for (int i = 0; i <= SequenceArchives.Last().File.Sequences.Last().Index; i++) {
-                            string defName = "Sequence_" + i;
-                            try { defName = seqArcSequenceNames[ind][i]; } catch { }
-                            var e = SequenceArchives.Last().File.Sequences.Where(x => x.Index == i).FirstOrDefault();
-                            if (defName != null && e != null) {
-                                e.Name = defName;
-                                e.Bank = Banks.Where(x => x.Index == e.ReadingBankId).FirstOrDefault();
-                                e.Player = Players.Where(x => x.Index == e.ReadingPlayerId).FirstOrDefault();
-                                if (!SequenceArchives.Last().File.Labels.ContainsKey(defName)) {
-                                    SequenceArchives.Last().File.Labels.Add(defName, labels.Values.ElementAt(seqNum));
+
+            if (!LiteMode) {
+                ind = 0;
+                foreach (var o in offs) {
+                    if (o != 0) {
+                        r.Jump(o);
+                        SequenceArchives.Add(r.Read<SequenceArchiveInfo>());
+                        SequenceArchives.Last().Index = ind;
+                        SequenceArchives.Last().Name = ind > (seqArcNames.Count - 1) ? "SEQARC_" + ind : seqArcNames[ind];
+                        r.Jump(fileOffs[(int)SequenceArchives.Last().ReadingFileId].offset, true);
+                        SequenceArchives.Last().File = r.ReadFile<SequenceArchive>();
+                        var labels = SequenceArchives.Last().File.Labels;
+                        SequenceArchives.Last().File.Labels = new Dictionary<string, uint>();
+
+                        if (SequenceArchives.Last().File.Sequences.Count > 0) {
+                            int seqNum = 0;
+                            for (int i = 0; i <= SequenceArchives.Last().File.Sequences.Last().Index; i++) {
+                                string defName = "Sequence_" + i;
+                                try { defName = seqArcSequenceNames[ind][i]; } catch { }
+                                var e = SequenceArchives.Last().File.Sequences.Where(x => x.Index == i).FirstOrDefault();
+                                if (defName != null && e != null) {
+                                    e.Name = defName;
+                                    e.Bank = Banks.Where(x => x.Index == e.ReadingBankId).FirstOrDefault();
+                                    e.Player = Players.Where(x => x.Index == e.ReadingPlayerId).FirstOrDefault();
+                                    if (!SequenceArchives.Last().File.Labels.ContainsKey(defName)) {
+                                        SequenceArchives.Last().File.Labels.Add(defName, labels.Values.ElementAt(seqNum));
+                                    }
+                                    seqNum++;
                                 }
-                                seqNum++;
                             }
                         }
-                    }
-                    string md5 = SequenceArchives.Last().File.Md5Sum;
-                    if (md5Ids.ContainsKey(md5)) {
-                        if (!md5Ids[md5].Contains(SequenceArchives.Last().ReadingFileId)) {
-                            SequenceArchives.Last().ForceIndividualFile = true;
+                        string md5 = SequenceArchives.Last().File.Md5Sum;
+                        if (md5Ids.ContainsKey(md5)) {
+                            if (!md5Ids[md5].Contains(SequenceArchives.Last().ReadingFileId)) {
+                                SequenceArchives.Last().ForceIndividualFile = true;
+                            }
+                        } else {
+                            md5Ids.Add(md5, new List<uint>() { SequenceArchives.Last().ReadingFileId });
                         }
-                    } else {
-                        md5Ids.Add(md5, new List<uint>() { SequenceArchives.Last().ReadingFileId });
                     }
+                    ind++;
                 }
-                ind++;
             }
 
             //Read group info.
             r.JumpToOffset("groupInfo");
             offs = r.Read<Table<uint>>();
-            ind = 0;
-            foreach (var o in offs) {
-                if (o != 0) {
-                    r.Jump(o);
-                    Groups.Add(r.Read<GroupInfo>());
-                    Groups.Last().Index = ind;
-                    Groups.Last().Name = ind > (groupNames.Count - 1) ? "GROUP_" + ind : groupNames[ind];
-                    for (int i = 0; i < Groups.Last().Entries.Count; i++) {
-                        switch (Groups.Last().Entries[i].Type) {
-                            case GroupEntryType.Sequence:
-                                Groups.Last().Entries[i].Entry = Sequences.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
-                                break;
-                            case GroupEntryType.Bank:
-                                Groups.Last().Entries[i].Entry = Banks.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
+
+            if (!LiteMode) {
+                ind = 0;
+                foreach (var o in offs) {
+                    if (o != 0) {
+                        r.Jump(o);
+                        Groups.Add(r.Read<GroupInfo>());
+                        Groups.Last().Index = ind;
+                        Groups.Last().Name = ind > (groupNames.Count - 1) ? "GROUP_" + ind : groupNames[ind];
+                        for (int i = 0; i < Groups.Last().Entries.Count; i++) {
+                            switch (Groups.Last().Entries[i].Type) {
+                                case GroupEntryType.Sequence:
+                                    Groups.Last().Entries[i].Entry = Sequences.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
                                     break;
-                            case GroupEntryType.WaveArchive:
-                                Groups.Last().Entries[i].Entry = WaveArchives.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
+                                case GroupEntryType.Bank:
+                                    Groups.Last().Entries[i].Entry = Banks.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
                                     break;
-                            case GroupEntryType.SequenceArchive:
-                                Groups.Last().Entries[i].Entry = SequenceArchives.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
+                                case GroupEntryType.WaveArchive:
+                                    Groups.Last().Entries[i].Entry = WaveArchives.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
                                     break;
+                                case GroupEntryType.SequenceArchive:
+                                    Groups.Last().Entries[i].Entry = SequenceArchives.Where(x => x.Index == (int)Groups.Last().Entries[i].ReadingId).FirstOrDefault();
+                                    break;
+                            }
                         }
                     }
+                    ind++;
                 }
-                ind++;
             }
-
         }
 
         /// <summary>
@@ -519,6 +562,9 @@ namespace NitroFileLoader {
         /// </summary>
         /// <param name="w">The writer.</param>
         public override void Write(FileWriter w) {
+            if(LiteMode) {
+                throw new InvalidOperationException("The file was opened in LiteMode, so it cannot be written.");
+            }
 
             //Init file.
             w.InitFile<SDATHeader>("SDAT", ByteOrder.LittleEndian, null, SaveSymbols ? 4 : 3);

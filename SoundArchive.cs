@@ -113,6 +113,12 @@ namespace NitroFileLoader {
 
 
         /// <summary>
+        /// Reference to the SDAT header.
+        /// </summary>
+        public FileHeader SdatHeader;
+
+
+        /// <summary>
         /// Save symbol block.
         /// </summary>
         public bool SaveSymbols = true;
@@ -157,7 +163,7 @@ namespace NitroFileLoader {
         public override void Read(FileReader r) {
 
             //Open the file.
-            r.OpenFile<SDATHeader>(out FileHeader header);
+            r.OpenFile<SDATHeader>(out SdatHeader);
 
             //Names.
             List<string> seqNames = new List<string>();
@@ -171,7 +177,7 @@ namespace NitroFileLoader {
             List<string> streamNames = new List<string>();
 
             //Symbol block.
-            if (header.BlockOffsets.Length > 3) {
+            if (SdatHeader.BlockOffsets.Length > 3) {
                 //Block header.
                 r.OpenBlock(0, out _, out _, false);
                 r.ReadUInt64();
@@ -246,7 +252,7 @@ namespace NitroFileLoader {
             }
 
             //FAT block.
-            r.OpenBlock(header.BlockOffsets.Length > 3 ? 2 : 1, out _, out _);
+            r.OpenBlock(SdatHeader.BlockOffsets.Length > 3 ? 2 : 1, out _, out _);
 
             //Read entries.
             uint numFiles = r.ReadUInt32();
@@ -257,14 +263,14 @@ namespace NitroFileLoader {
             }
 
             // record the FILE block absolute offset from the header
-            FileBlockOffset = header.BlockOffsets.Length > 3 ? header.BlockOffsets[3] : header.BlockOffsets[2];
+            FileBlockOffset = SdatHeader.BlockOffsets.Length > 3 ? SdatHeader.BlockOffsets[3] : SdatHeader.BlockOffsets[2];
 
             // save the FAT table for later use
             FileTable = fileOffs;
 
 
             //Info block.
-            r.OpenBlock(header.BlockOffsets.Length > 3 ? 1 : 0, out _, out _, false);
+            r.OpenBlock(SdatHeader.BlockOffsets.Length > 3 ? 1 : 0, out _, out _, false);
             r.ReadUInt64();
 
             //Open offsets.

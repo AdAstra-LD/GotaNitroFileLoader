@@ -519,39 +519,39 @@ namespace NitroFileLoader {
         /// Returns the absolute offset (from the start of the SDAT file) of the wave-archive file
         /// corresponding to the given wave-archive index (0-based, index into WaveArchives).
         /// </summary>
-        public long GetWaveArchiveAbsoluteOffset(int idx) {
+        public (uint offset, uint size) GetWaveArchiveFATEntry(int idx) {
             // This is the file id stored in the info table: index into the FAT/FILE entries.
             uint readingFileId = WaveArchives[idx].ReadingFileId;
 
             // offsets in FileTable are relative to the start of the FILE block:
             // absolute offset = FILE block absolute offset + per-file offset
-            return FileTable[(int)readingFileId].offset;
+            return FileTable[(int)readingFileId];
         }
 
         /// <summary>
         /// Returns the absolute offset (from the start of the SDAT file) of the bank file
         /// corresponding to the given wave-archive index (0-based, index into Banks).
         /// </summary>
-        public long GetBankAbsoluteOffset(int idx) {
+        public (uint offset, uint size) GetBankFATEntry(int idx) {
             // This is the file id stored in the info table: index into the FAT/FILE entries.
             uint readingFileId = Banks[idx].ReadingFileId;
 
             // offsets in FileTable are relative to the start of the FILE block:
             // absolute offset = FILE block absolute offset + per-file offset
-            return FileTable[(int)readingFileId].offset;
+            return FileTable[(int)readingFileId];
         }
 
         /// <summary>
         /// Returns the absolute offset (from the start of the SDAT file) of the sequence file
         /// corresponding to the given wave-archive index (0-based, index into Sequences).
         /// </summary>
-        public long GetSequenceAbsoluteOffset(int idx) {
+        public (uint offset, uint size) GetSequenceFATEntry(int idx) {
             // This is the file id stored in the info table: index into the FAT/FILE entries.
             uint readingFileId = Sequences[idx].ReadingFileId;
 
             // offsets in FileTable are relative to the start of the FILE block:
             // absolute offset = FILE block absolute offset + per-file offset
-            return FileTable[(int)readingFileId].offset;
+            return FileTable[(int)readingFileId];
         }
 
 

@@ -519,42 +519,48 @@ namespace NitroFileLoader {
         /// Returns the absolute offset (from the start of the SDAT file) of the wave-archive file
         /// corresponding to the given wave-archive index (0-based, index into WaveArchives).
         /// </summary>
-        public (uint offset, uint size) GetWaveArchiveFATEntry(int idx) {
+        public (uint offset, uint size, uint fatFileID) GetWaveArchiveFATEntry(int idx) {
             int foundIdx = WaveArchives.FindIndex(x => x.Index == idx);
             if (foundIdx < 0) {
                 throw new ArgumentException("No sequence with the given index exists.");
             }
             uint readingFileId = WaveArchives[foundIdx].ReadingFileId;
 
-            return FileTable[(int)readingFileId];
+            (uint offset, uint size) = FileTable[(int)readingFileId];
+
+            return (offset, size, readingFileId);
         }
 
         /// <summary>
         /// Returns the absolute offset (from the start of the SDAT file) of the bank file
         /// corresponding to the given wave-archive index (0-based, index into Banks).
         /// </summary>
-        public (uint offset, uint size) GetBankFATEntry(int idx) {
+        public (uint offset, uint size, uint fatFileID) GetBankFATEntry(int idx) {
             int foundIdx = Banks.FindIndex(x => x.Index == idx);
             if (foundIdx < 0) {
                 throw new ArgumentException("No sequence with the given index exists.");
             }
             uint readingFileId = Banks[foundIdx].ReadingFileId;
 
-            return FileTable[(int)readingFileId];
+            (uint offset, uint size) = FileTable[(int)readingFileId];
+            
+            return (offset, size, readingFileId);
         }
 
         /// <summary>
         /// Returns the absolute offset (from the start of the SDAT file) of the sequence file
         /// corresponding to the given wave-archive index (0-based, index into Sequences).
         /// </summary>
-        public (uint offset, uint size) GetSequenceFATEntry(int idx) {
+        public (uint offset, uint size, uint fatFileID) GetSequenceFATEntry(int idx) {
             int foundIdx = Sequences.FindIndex(x => x.Index == idx);
             if(foundIdx < 0) {
                 throw new ArgumentException("No sequence with the given index exists.");
             }
             uint readingFileId = Sequences[foundIdx].ReadingFileId;
 
-            return FileTable[(int)readingFileId];
+            (uint offset, uint size) = FileTable[(int)readingFileId];
+
+            return (offset, size, readingFileId);
         }
 
 

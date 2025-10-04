@@ -520,11 +520,12 @@ namespace NitroFileLoader {
         /// corresponding to the given wave-archive index (0-based, index into WaveArchives).
         /// </summary>
         public (uint offset, uint size) GetWaveArchiveFATEntry(int idx) {
-            // This is the file id stored in the info table: index into the FAT/FILE entries.
-            uint readingFileId = WaveArchives[idx].ReadingFileId;
+            int foundIdx = WaveArchives.FindIndex(x => x.Index == idx);
+            if (foundIdx < 0) {
+                throw new ArgumentException("No sequence with the given index exists.");
+            }
+            uint readingFileId = WaveArchives[foundIdx].ReadingFileId;
 
-            // offsets in FileTable are relative to the start of the FILE block:
-            // absolute offset = FILE block absolute offset + per-file offset
             return FileTable[(int)readingFileId];
         }
 
@@ -533,11 +534,12 @@ namespace NitroFileLoader {
         /// corresponding to the given wave-archive index (0-based, index into Banks).
         /// </summary>
         public (uint offset, uint size) GetBankFATEntry(int idx) {
-            // This is the file id stored in the info table: index into the FAT/FILE entries.
-            uint readingFileId = Banks[idx].ReadingFileId;
+            int foundIdx = Banks.FindIndex(x => x.Index == idx);
+            if (foundIdx < 0) {
+                throw new ArgumentException("No sequence with the given index exists.");
+            }
+            uint readingFileId = Banks[foundIdx].ReadingFileId;
 
-            // offsets in FileTable are relative to the start of the FILE block:
-            // absolute offset = FILE block absolute offset + per-file offset
             return FileTable[(int)readingFileId];
         }
 
@@ -546,11 +548,12 @@ namespace NitroFileLoader {
         /// corresponding to the given wave-archive index (0-based, index into Sequences).
         /// </summary>
         public (uint offset, uint size) GetSequenceFATEntry(int idx) {
-            // This is the file id stored in the info table: index into the FAT/FILE entries.
-            uint readingFileId = Sequences[idx].ReadingFileId;
+            int foundIdx = Sequences.FindIndex(x => x.Index == idx);
+            if(foundIdx < 0) {
+                throw new ArgumentException("No sequence with the given index exists.");
+            }
+            uint readingFileId = Sequences[foundIdx].ReadingFileId;
 
-            // offsets in FileTable are relative to the start of the FILE block:
-            // absolute offset = FILE block absolute offset + per-file offset
             return FileTable[(int)readingFileId];
         }
 

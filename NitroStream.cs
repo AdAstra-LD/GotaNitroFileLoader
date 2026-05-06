@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace NitroFileLoader {
 
@@ -93,8 +94,12 @@ namespace NitroFileLoader {
 
             //Data block.
             r.JumpToOffset("dataOffset", true, true);
-            Audio.Read(r, encodingType, numChannels, numBlocks, blockSize, blockSamples, lastBlockSize, lastBlockSamples, 0);
-
+            try {
+                Audio.Read(r, encodingType, numChannels, numBlocks, blockSize, blockSamples, lastBlockSize, lastBlockSamples, 0);
+            } catch(Exception e){
+                MessageBox.Show(e.ToString());
+                return;
+            }
         }
 
         /// <summary>

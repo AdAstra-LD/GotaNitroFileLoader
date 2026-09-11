@@ -120,22 +120,24 @@ namespace NitroFileLoader {
             }
 
             //Read channels.
-            w.Audio.Read(r, format, numChannels, (int)dataSize, (int)w.LoopEnd, 0);
+            w.Audio.Read(r, format, numChannels, (int)dataSize, (int)Offset2Samples(dataSize, pcmFormat), 0);
 
             //Return the wave.
             return w;
 
         }
 
+        /// <summary>
+        /// Recompute the loop end (exclusive sample index) from the loop start and the loop length in words.
+        /// </summary>
+        /// <param name="pcmFormat">The PCM format.</param>
+        /// <param name="dataSize">Size of the wave data in bytes, or -1 to use the loaded audio.</param>
         public void UpdateLoopEnd(PcmFormat pcmFormat, int dataSize = -1) {
-#if true
-            LoopEnd = LoopStart + Offset2Samples(LoopLength * 4, pcmFormat);
-            if (LoopEnd > Audio.NumSamples) {
-                LoopEnd = dataSize == -1 ? (uint)Audio.NumSamples : (uint)dataSize;
+            uint totalSamples = dataSize == -1 ? (uint)Audio.NumSamples : Offset2Samples((uint)dataSize, pcmFormat);
+            LoopEnd = LoopStart + Length2Samples(LoopLength * 4, pcmFormat);
+            if (LoopEnd > totalSamples) {
+                LoopEnd = totalSamples;
             }
-#else
-            LoopEnd = dataSize == -1 ? (uint)Audio.NumSamples : (uint)dataSize;
-#endif
         }
 
         public PcmFormat GetPcmFormat() {
@@ -245,6 +247,25 @@ namespace NitroFileLoader {
             }
             return 0;
 
+        }
+
+        /// <summary>
+        /// Convert a data length in bytes to a number of samples. Unlike Offset2Samples this does not
+        /// account for the ADPCM header, since a length does not include it.
+        /// </summary>
+        /// <param name="length">The length in bytes.</param>
+        /// <param name="format">The format.</param>
+        /// <returns>The number of samples.</returns>
+        public static uint Length2Samples(uint length, PcmFormat format) {
+            switch (format) {
+                case PcmFormat.SignedPCM8:
+                    return length;
+                case PcmFormat.PCM16:
+                    return length / 2;
+                case PcmFormat.Encoded:
+                    return length * 2;
+            }
+            return 0;
         }
 
         /// <summary>

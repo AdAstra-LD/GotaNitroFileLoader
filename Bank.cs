@@ -3,7 +3,6 @@ using GotaSequenceLib;
 using GotaSequenceLib.Playback;
 using GotaSoundIO.IO;
 using GotaSoundIO.Sound;
-using Kermalis.SoundFont2;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -201,10 +200,156 @@ namespace NitroFileLoader {
         /// <param name="b">The bank info.</param>
         /// <returns>This as a soundfont.</returns>
         public SoundFont ToSoundFont(SoundArchive a, BankInfo b) {
+            return ToSoundFont(a, b, new SF2ExportOptions());
+        }
 
-            //Laziness.
-            return new SoundFont(ToDLS(a, b));
+        /// <summary>
+        /// Convert the SBNK into a sound font, building the SF2 structures directly.
+        /// Envelopes use the DS envelope tables (see DSEnvelope), samples are always 16-bit PCM,
+        /// and the options control resampling, requantization and instrument naming.
+        /// </summary>
+        /// <param name="a">The sound archive.</param>
+        /// <param name="b">The bank info.</param>
+        /// <param name="options">Export options.</param>
+        /// <returns>This as a soundfont.</returns>
+        public SoundFont ToSoundFont(SoundArchive a, BankInfo b, SF2ExportOptions options) {
 
+            //New sound font.
+            if (options == null) { options = new SF2ExportOptions(); }
+            SoundFont sf = new SoundFont() {
+                BankName = string.IsNullOrEmpty(b.Name) ? "SBNK" : b.Name,
+                Tools = (System.Reflection.Assembly.GetEntryAssembly() ?? System.Reflection.Assembly.GetExecutingAssembly()).GetName().Name,
+                CreationDate = DateTime.Now.ToString("MMMM d, yyyy", System.Globalization.CultureInfo.InvariantCulture),
+                Comment = "Exported from SBNK with DS envelope tables; " + options.Describe() + "."
+            };
+
+            //Sample lookup: key -> sample index.
+            Dictionary<string, ushort> sampleMap = new Dictionary<string, ushort>();
+            Func<string, string, Func<RiffWave>, int> getSample = (key, name, load) => {
+                ushort id;
+                if (sampleMap.TryGetValue(key, out id)) { return id; }
+                RiffWave wave = load();
+                if (wave == null) { return -1; }
+                id = (ushort)sf.Samples.Count;
+                sf.Samples.Add(new SampleItem() {
+                    Name = SF2ExportOptions.ShortenName(name, SF2ExportOptions.MaxNameLength),
+                    Wave = wave,
+                    OriginalPitch = 60,
+                    PitchCorrection = 0,
+                    LinkType = SF2LinkTypes.Mono
+                });
+                sampleMap.Add(key, id);
+                return id;
+            };
+
+            //Add each instrument.
+            foreach (var inst in Instruments) {
+
+                //Instrument name.
+                string name = options.GetInstrumentName(inst.Index) ?? ("Instrument " + inst.Index);
+
+                //New instrument.
+                GotaSoundBank.SF2.Instrument im = new GotaSoundBank.SF2.Instrument() { Name = name };
+
+                //Add zones.
+                bool direct = inst as DirectInstrument != null;
+                int lastNote = inst as DrumSetInstrument != null ? (inst as DrumSetInstrument).Min : 0;
+                foreach (var n in inst.NoteInfo) {
+
+                    //Key range.
+                    byte low = (byte)Math.Min(lastNote, 127);
+                    byte high = direct ? (byte)127 : (byte)Math.Min((int)n.Key, 127);
+                    if (high < low) { high = low; }
+                    lastNote = high + 1;
+
+                    //Sample.
+                    int sampleId = -1;
+                    switch (n.InstrumentType) {
+                        case InstrumentType.PCM:
+                            WaveArchiveInfo war = n.WarId < b.WaveArchives.Length ? b.WaveArchives[n.WarId] : null;
+                            if (war != null && war.File != null && n.WaveId < war.File.Waves.Count) {
+                                Wave swav = war.File.Waves[n.WaveId];
+                                sampleId = getSample("W" + war.Index + "_" + n.WaveId, "WAR" + war.Index + " " + n.WaveId, () => {
+                                    RiffWave pcm = new RiffWave();
+                                    pcm.FromOtherStreamFile(swav, typeof(PCM16));
+                                    if (pcm.Loops && pcm.LoopEnd == 0) { pcm.LoopEnd = (uint)pcm.Audio.NumSamples; }
+                                    return pcm;
+                                });
+                            }
+                            break;
+                        case InstrumentType.PSG:
+                            int duty = n.WaveId % 8;
+                            sampleId = getSample("PSG" + duty, "PSG Duty " + (duty + 1) + "/8", () => LoadHardwareWave("DutyCycle" + (duty + 1) + ".wav"));
+                            break;
+                        case InstrumentType.Noise:
+                            sampleId = getSample("NOISE", "PSG Noise", () => LoadHardwareWave("WhiteNoise.wav"));
+                            break;
+                    }
+                    if (sampleId < 0) {
+                        continue;
+                    }
+                    RiffWave sampleWave = sf.Samples[sampleId].Wave;
+
+                    //Zone. Generator order matters: key range first, sample ID last.
+                    Zone z = new Zone();
+                    if (low != 0 || high != 127) {
+                        z.Generators.Add(new Generator() { Gen = SF2Generators.KeyRange, Amount = new SF2GeneratorAmount() { LowByte = low, HighByte = high } });
+                    }
+                    z.Generators.Add(new Generator() { Gen = SF2Generators.OverridingRootKey, Amount = new SF2GeneratorAmount() { UAmount = n.BaseNote } });
+                    z.Generators.Add(new Generator() { Gen = SF2Generators.AttackVolEnv, Amount = new SF2GeneratorAmount() { Amount = DSEnvelope.AttackTimecents(n.Attack) } });
+                    z.Generators.Add(new Generator() { Gen = SF2Generators.DecayVolEnv, Amount = new SF2GeneratorAmount() { Amount = DSEnvelope.DecayTimecents(n.Decay) } });
+                    z.Generators.Add(new Generator() { Gen = SF2Generators.SustainVolEnv, Amount = new SF2GeneratorAmount() { Amount = DSEnvelope.SustainCentibels(n.Sustain) } });
+                    z.Generators.Add(new Generator() { Gen = SF2Generators.ReleaseVolEnv, Amount = new SF2GeneratorAmount() { Amount = DSEnvelope.ReleaseTimecents(n.Release) } });
+                    short pan = DSEnvelope.PanToSF2(n.Pan);
+                    if (pan != 0) {
+                        z.Generators.Add(new Generator() { Gen = SF2Generators.Pan, Amount = new SF2GeneratorAmount() { Amount = pan } });
+                    }
+                    if (sampleWave.Loops) {
+                        z.Generators.Add(new Generator() { Gen = SF2Generators.SampleModes, Amount = new SF2GeneratorAmount() { Amount = 1 } });
+                    }
+                    z.Generators.Add(new Generator() { Gen = SF2Generators.SampleID, Amount = new SF2GeneratorAmount() { UAmount = (ushort)sampleId } });
+                    im.Zones.Add(z);
+
+                }
+
+                //Add the instrument and its preset.
+                ushort instNum = (ushort)sf.Instruments.Count;
+                sf.Instruments.Add(im);
+                sf.Presets.Add(new Preset() {
+                    Bank = (ushort)(inst.Index / 128),
+                    PresetNumber = (ushort)(inst.Index % 128),
+                    Name = name,
+                    Zones = new List<Zone>() { new Zone() { Generators = new List<Generator>() { new Generator() { Gen = SF2Generators.Instrument, Amount = new SF2GeneratorAmount() { UAmount = instNum } } } } }
+                });
+
+            }
+
+            //Sample processing.
+            SoundFontProcessing.Apply(sf, options);
+
+            //Return the sound font.
+            return sf;
+
+        }
+
+        /// <summary>
+        /// Load one of the bundled hardware waves (PSG duty cycles, noise).
+        /// </summary>
+        /// <param name="fileName">File name inside the Hardware folder.</param>
+        /// <returns>The wave, or null if it can not be found.</returns>
+        private static RiffWave LoadHardwareWave(string fileName) {
+            string[] candidates = new string[] {
+                System.IO.Path.Combine("Hardware", fileName),
+                System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Hardware", fileName)
+            };
+            foreach (string path in candidates) {
+                if (System.IO.File.Exists(path)) {
+                    RiffWave wave = new RiffWave(path);
+                    if (wave.Loops && wave.LoopEnd == 0) { wave.LoopEnd = (uint)wave.Audio.NumSamples; }
+                    return wave;
+                }
+            }
+            return null;
         }
 
         /// <summary>

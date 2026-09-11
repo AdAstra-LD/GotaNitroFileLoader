@@ -106,6 +106,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Bank.cs" />
+    <Compile Include="SoundFont\DSEnvelope.cs" />
+    <Compile Include="SoundFont\SF2ExportOptions.cs" />
+    <Compile Include="SoundFont\SoundFontProcessing.cs" />
     <Compile Include="Instrument\DirectInstrument.cs" />
     <Compile Include="Instrument\DrumSetInstrument.cs" />
     <Compile Include="Instrument\Instrument.cs" />

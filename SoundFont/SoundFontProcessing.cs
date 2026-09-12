@@ -62,6 +62,40 @@ namespace NitroFileLoader {
         }
 
         /// <summary>
+        /// Scale a wave so that its loudest sample reaches the target peak.
+        ///
+        /// The bundled hardware waves (PSG duty cycles and noise) are recordings taken well below the level the
+        /// DS actually outputs: the sound driver emits a square that swings between short.MinValue and
+        /// short.MaxValue (see GotaSequenceLib.Playback.Channel), while the recordings only reach about a fifth
+        /// of that, which makes PSG instruments far too quiet next to the PCM samples of the same bank.
+        ///
+        /// Waves that already reach the target are left alone, so this never attenuates and never clips.
+        /// </summary>
+        /// <param name="wave">The wave to scale in place.</param>
+        /// <param name="targetPeak">Peak amplitude to reach.</param>
+        /// <returns>The gain that was applied.</returns>
+        public static double NormalizePeak(RiffWave wave, int targetPeak = short.MaxValue) {
+            short[] data = GetSamples(wave);
+            int peak = 0;
+            foreach (short s in data) {
+                int magnitude = Math.Abs((int)s);
+                if (magnitude > peak) { peak = magnitude; }
+            }
+            if (peak == 0 || peak >= targetPeak) {
+                return 1;
+            }
+            double gain = targetPeak / (double)peak;
+            for (int i = 0; i < data.Length; i++) {
+                long scaled = (long)Math.Round(data[i] * gain, MidpointRounding.AwayFromZero);
+                if (scaled > short.MaxValue) { scaled = short.MaxValue; }
+                if (scaled < short.MinValue) { scaled = short.MinValue; }
+                data[i] = (short)scaled;
+            }
+            ReplaceSamples(wave, data);
+            return gain;
+        }
+
+        /// <summary>
         /// Requantize 16-bit sample data to the given bit depth (mid-tread, rounded to nearest, silence stays 0).
         /// </summary>
         public static void Quantize(RiffWave wave, int bits) {

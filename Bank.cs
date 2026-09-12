@@ -279,10 +279,10 @@ namespace NitroFileLoader {
                             break;
                         case InstrumentType.PSG:
                             int duty = n.WaveId % 8;
-                            sampleId = getSample("PSG" + duty, "PSG Duty " + (duty + 1) + "/8", () => LoadHardwareWave("DutyCycle" + (duty + 1) + ".wav"));
+                            sampleId = getSample("PSG" + duty, "PSG Duty " + (duty + 1) + "/8", () => LoadHardwareWave("DutyCycle" + (duty + 1) + ".wav", options.BoostHardwareSamples));
                             break;
                         case InstrumentType.Noise:
-                            sampleId = getSample("NOISE", "PSG Noise", () => LoadHardwareWave("WhiteNoise.wav"));
+                            sampleId = getSample("NOISE", "PSG Noise", () => LoadHardwareWave("WhiteNoise.wav", options.BoostHardwareSamples));
                             break;
                     }
                     if (sampleId < 0) {
@@ -336,8 +336,9 @@ namespace NitroFileLoader {
         /// Load one of the bundled hardware waves (PSG duty cycles, noise).
         /// </summary>
         /// <param name="fileName">File name inside the Hardware folder.</param>
+        /// <param name="boost">Scale the wave up to full scale, to match the level the DS driver outputs.</param>
         /// <returns>The wave, or null if it can not be found.</returns>
-        private static RiffWave LoadHardwareWave(string fileName) {
+        private static RiffWave LoadHardwareWave(string fileName, bool boost) {
             string[] candidates = new string[] {
                 System.IO.Path.Combine("Hardware", fileName),
                 System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Hardware", fileName)
@@ -346,6 +347,7 @@ namespace NitroFileLoader {
                 if (System.IO.File.Exists(path)) {
                     RiffWave wave = new RiffWave(path);
                     if (wave.Loops && wave.LoopEnd == 0) { wave.LoopEnd = (uint)wave.Audio.NumSamples; }
+                    if (boost) { SoundFontProcessing.NormalizePeak(wave); }
                     return wave;
                 }
             }

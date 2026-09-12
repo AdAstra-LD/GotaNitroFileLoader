@@ -32,6 +32,14 @@ namespace NitroFileLoader {
         public int BitDepth = 10;
 
         /// <summary>
+        /// Scale the bundled PSG duty cycle and noise waves up to full scale.
+        ///
+        /// They are recorded about 15 dB below the level the DS sound driver actually outputs, so without this
+        /// PSG and noise instruments are much quieter than the PCM instruments of the same bank.
+        /// </summary>
+        public bool BoostHardwareSamples = true;
+
+        /// <summary>
         /// Name presets and instruments from InstrumentNames.
         /// </summary>
         public bool EmbedInstrumentNames = false;
@@ -161,6 +169,7 @@ namespace NitroFileLoader {
         /// </summary>
         public string Describe() {
             var parts = new List<string>();
+            if (BoostHardwareSamples) { parts.Add("PSG and noise waves boosted to full scale"); }
             if (Resample) { parts.Add("resampled to " + TargetSampleRate + " Hz (zero-order hold)"); }
             if (Quantize) { parts.Add("quantized to " + BitDepth + " bits"); }
             if (EmbedInstrumentNames) { parts.Add("instrument names from " + Path.GetFileName(InstrumentNamesPath)); }

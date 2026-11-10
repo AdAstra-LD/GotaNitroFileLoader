@@ -58,11 +58,26 @@ namespace NitroFileLoader {
         public abstract uint MaxInstruments();
 
         /// <summary>
-        /// Get the note parameter for a note.
+        /// Get the note parameter for a note. Only PCM, PSG and noise play from the bank: direct PCM points into memory, null and blank are silent.
         /// </summary>
         /// <param name="note">The note to retrieve.</param>
-        /// <returns>The note parameter.</returns>
+        /// <returns>The note parameter, or null when the note plays nothing.</returns>
         public NoteInfo GetNoteInfo(Notes note) {
+            NoteInfo n = FindNoteInfo(note);
+            return n != null && (n.InstrumentType == InstrumentType.PCM || n.InstrumentType == InstrumentType.PSG || n.InstrumentType == InstrumentType.Noise) ? n : null;
+        }
+
+        /// <summary>
+        /// Get the region a note falls in, whatever its kind.
+        /// </summary>
+        /// <param name="note">The note to retrieve.</param>
+        /// <returns>The region, or null.</returns>
+        private NoteInfo FindNoteInfo(Notes note) {
+
+            //No regions.
+            if (NoteInfo.Count == 0) {
+                return null;
+            }
 
             //Switch instrument type.
             switch (Type()) {
@@ -71,6 +86,9 @@ namespace NitroFileLoader {
                 case InstrumentType.PCM:
                 case InstrumentType.PSG:
                 case InstrumentType.Noise:
+                case InstrumentType.DirectPCM:
+                case InstrumentType.Null:
+                case InstrumentType.Blank:
                     return NoteInfo[0];
 
                 //Range.

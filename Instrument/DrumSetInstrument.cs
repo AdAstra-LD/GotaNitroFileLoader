@@ -38,6 +38,7 @@ namespace NitroFileLoader {
                 //Get the instrument type.
                 InstrumentType t = (InstrumentType)r.ReadUInt16();
                 NoteInfo n = r.Read<NoteInfo>();
+                n.InstrumentType = t;
                 if (lastInst == null) {
                     lastInst = n;
                 } else {

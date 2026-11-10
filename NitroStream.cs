@@ -77,6 +77,53 @@ namespace NitroFileLoader {
         private bool UnpaddedDataSize;
 
         /// <summary>
+        /// Format id read with data of an unknown encoding, written back with it.
+        /// </summary>
+        private byte UnknownFormatId;
+
+        /// <summary>
+        /// The STRM format id the stream is written with.
+        /// </summary>
+        public byte FormatId {
+            get {
+                Type t = Audio.EncodingType;
+                if (t == typeof(PCM8Signed)) {
+                    return (byte)PcmFormat.SignedPCM8;
+                } else if (t == typeof(PCM16)) {
+                    return (byte)PcmFormat.PCM16;
+                } else if (t == typeof(ImaAdpcm)) {
+                    return (byte)PcmFormat.Encoded;
+                } else if (t == typeof(UnknownStreamEncoding)) {
+                    return UnknownFormatId;
+                }
+                throw new Exception("Invalid channel format!");
+            }
+        }
+
+        /// <summary>
+        /// If the audio can be decoded: false for an unknown format id, or when nothing was read.
+        /// </summary>
+        public bool CanDecode => Audio.Channels.Count > 0 && Audio.EncodingType != typeof(UnknownStreamEncoding);
+
+        /// <summary>
+        /// Encoding for a format id, or null for one this tool does not decode.
+        /// </summary>
+        /// <param name="formatId">STRM format id.</param>
+        /// <returns>The encoding type.</returns>
+        public static Type EncodingOf(byte formatId) {
+            switch ((PcmFormat)formatId) {
+                case PcmFormat.SignedPCM8:
+                    return typeof(PCM8Signed);
+                case PcmFormat.PCM16:
+                    return typeof(PCM16);
+                case PcmFormat.Encoded:
+                    return typeof(ImaAdpcm);
+                default:
+                    return null;
+            }
+        }
+
+        /// <summary>
         /// Read the file.
         /// </summary>
         /// <param name="r">The reader.</param>
@@ -87,7 +134,7 @@ namespace NitroFileLoader {
 
             //Head block.
             r.OpenBlock(0, out _, out _);
-            PcmFormat pcmFormat = (PcmFormat)r.ReadByte();
+            byte formatId = r.ReadByte();
             Loops = r.ReadBoolean();
             int numChannels = r.ReadByte();
             HeaderPadding = r.ReadByte();
@@ -104,19 +151,9 @@ namespace NitroFileLoader {
             uint lastBlockSamples = r.ReadUInt32();
             Reserved = r.ReadBytes(0x20);
 
-            //Encoding type.
-            Type encodingType = null;
-            switch (pcmFormat) {
-                case PcmFormat.SignedPCM8:
-                    encodingType = typeof(PCM8Signed);
-                    break;
-                case PcmFormat.PCM16:
-                    encodingType = typeof(PCM16);
-                    break;
-                case PcmFormat.Encoded:
-                    encodingType = typeof(ImaAdpcm);
-                    break;
-            }
+            //Encoding type. An id this tool does not decode is kept as opaque data.
+            Type encodingType = EncodingOf(formatId) ?? typeof(UnknownStreamEncoding);
+            UnknownFormatId = formatId;
 
             //Data block.
             r.JumpToOffset("dataOffset", true, true);
@@ -146,22 +183,14 @@ namespace NitroFileLoader {
             w.Write((uint)0x50);
 
             //Format.
-            if (Audio.EncodingType.Equals(typeof(PCM8Signed))) {
-                w.Write((byte)PcmFormat.SignedPCM8);
-            } else if (Audio.EncodingType.Equals(typeof(PCM16))) {
-                w.Write((byte)PcmFormat.PCM16);
-            } else if (Audio.EncodingType.Equals(typeof(ImaAdpcm))) {
-                w.Write((byte)PcmFormat.Encoded);
-            } else {
-                throw new Exception("Invalid channel format!");
-            }
+            w.Write(FormatId);
 
-            //Block table: blocked audio keeps its block size, unblocked audio is one block.
+            //Block table: blocked audio keeps its block size, unblocked audio is one block. An unknown encoding keeps the samples per block it was read with.
             uint blockSize = (uint)Audio.DataSize;
             uint blockSamples = (uint)Audio.NumSamples;
             if (Audio.BlockSize != -1) {
                 blockSize = (uint)Audio.BlockSize;
-                blockSamples = (uint)((IAudioEncoding)Activator.CreateInstance(Audio.EncodingType)).SamplesFromBlockSize(Audio.BlockSize);
+                blockSamples = Audio.EncodingType == typeof(UnknownStreamEncoding) ? (uint)Audio.BlockSamples : (uint)((IAudioEncoding)Activator.CreateInstance(Audio.EncodingType)).SamplesFromBlockSize(Audio.BlockSize);
             }
 
             //The timer read with the file is kept while its sample rate is.

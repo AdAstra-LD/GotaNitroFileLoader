@@ -422,10 +422,10 @@ namespace NitroFileLoader {
                     switch (n.InstrumentType) {
                         case InstrumentType.PCM:
                             uint key = 0xFFFFFFFF;
-                            try {
-                                var p = b.WaveArchives[n.WarId].File.Waves[n.WaveId];
-                                key = (uint)(b.WaveArchives[n.WarId].Index << 16) | n.WaveId;
-                            } catch { }
+                            var war = n.WarId < b.WaveArchives.Length ? b.WaveArchives[n.WarId] : null;
+                            if (war != null && war.File != null && n.WaveId < war.File.Waves.Count) {
+                                key = (uint)(war.Index << 16) | n.WaveId;
+                            }
 
                             if (key != 0xFFFFFFFF) {
                                 if (!waveMap.ContainsKey(key)) {

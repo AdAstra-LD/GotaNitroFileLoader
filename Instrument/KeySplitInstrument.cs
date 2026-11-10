@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using GotaSequenceLib;
 using GotaSoundIO.IO;
@@ -46,6 +47,9 @@ namespace NitroFileLoader {
         public override void Write(FileWriter w) {
 
             //Get indices.
+            if (NoteInfo.Count < 1 || NoteInfo.Count > MaxInstruments()) {
+                throw new InvalidOperationException($"Key split instrument {Index} has {NoteInfo.Count} regions; a key split holds 1 to {MaxInstruments()}.");
+            }
             var indices = NoteInfo.Select(x => (byte)x.Key).ToArray();
             w.Write(indices);
             w.Write(new byte[8 - indices.Length]);

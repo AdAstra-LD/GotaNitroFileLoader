@@ -16,14 +16,15 @@ namespace NitroFileLoader {
         /// <param name="r">The reader.</param>
         public override void Read(FileReader r) {
 
-            //Get indices.
-            List<byte> indices = new List<byte>();
-            for (int i = 0; i < 8; i++) {
-                byte b = r.ReadByte();
-                if (b != 0) {
-                    indices.Add(b);
+            //Get indices. End keys ascend, so only the first can be 0 (a region for note 0 alone); the list ends after the last non-zero key.
+            byte[] keys = r.ReadBytes(8);
+            int count = 1;
+            for (int i = 1; i < 8; i++) {
+                if (keys[i] != 0) {
+                    count = i + 1;
                 }
             }
+            List<byte> indices = keys.Take(count).ToList();
 
             //Read note parameters.
             for (int i = 0; i < indices.Count; i++) {

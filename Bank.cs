@@ -127,6 +127,20 @@ namespace NitroFileLoader {
         /// <param name="w">The writer.</param>
         public override void Write(FileWriter w) {
 
+            //Each instrument needs its own non-negative index and at least one region.
+            foreach (var inst in Instruments) {
+                if (inst.Index < 0) {
+                    throw new InvalidOperationException($"Instrument index {inst.Index} is negative.");
+                }
+                if (inst.NoteInfo == null || inst.NoteInfo.Count == 0) {
+                    throw new InvalidOperationException($"Instrument {inst.Index} has no regions.");
+                }
+            }
+            var shared = Instruments.GroupBy(x => x.Index).FirstOrDefault(x => x.Count() > 1);
+            if (shared != null) {
+                throw new InvalidOperationException($"{shared.Count()} instruments share index {shared.Key}.");
+            }
+
             //Write the bank.
             w.InitFile<NHeader>("SBNK", ByteOrder.LittleEndian, null, 1);
             w.InitBlock("DATA");

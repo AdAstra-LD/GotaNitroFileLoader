@@ -69,6 +69,9 @@ namespace NitroFileLoader {
         public override void Write(FileWriter w) {
 
             //Write data.
+            if (NoteInfo.Count < 1 || (byte)NoteInfo.Last().Key < Min) {
+                throw new InvalidOperationException($"Drum set instrument {Index} covers no notes from its first key {Min}.");
+            }
             var indices = NoteInfo.Select(x => x.Key).ToArray();
             w.Write(Min);
             w.Write((byte)indices.Last());

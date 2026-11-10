@@ -38,12 +38,18 @@ namespace NitroFileLoader {
         public uint HeapSize;
 
         /// <summary>
+        /// If all sixteen channels were read as a mask of 0xFFFF rather than 0. The driver reads both as every channel, and they are written back as read.
+        /// </summary>
+        private bool AllChannelsAsMask;
+
+        /// <summary>
         /// Read the info.
         /// </summary>
         /// <param name="r">The reader.</param>
         public void Read(FileReader r) {
             SequenceMax = r.ReadUInt16();
             ChannelFlags = r.ReadBitFlags(2);
+            AllChannelsAsMask = ChannelFlags.All(x => x);
             if (ChannelFlags.Where(x => x == false).Count() == 16) { ChannelFlags = new bool[] { true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true }; }
             HeapSize = r.ReadUInt32();
         }
@@ -55,7 +61,7 @@ namespace NitroFileLoader {
         public void Write(FileWriter w) {
             w.Write(SequenceMax);
             if (ChannelFlags.Where(x => x == true).Count() == 16) {
-                w.Write((ushort)0);
+                w.Write((ushort)(AllChannelsAsMask ? 0xFFFF : 0));
             } else {
                 w.WriteBitFlags(ChannelFlags, 2);
             }

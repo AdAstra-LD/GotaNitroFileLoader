@@ -131,6 +131,7 @@
     <Compile Include="Sound Archive\WaveArchiveInfo.cs" />
     <Compile Include="NitroStream.cs" />
     <Compile Include="NitroWave.cs" />
+    <Compile Include="UnknownStreamEncoding.cs" />
     <Compile Include="WaveArchive.cs" />
   </ItemGroup>
   <ItemGroup>

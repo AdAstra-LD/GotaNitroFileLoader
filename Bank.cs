@@ -56,10 +56,11 @@ namespace NitroFileLoader {
         }
 
         /// <summary>
-        /// Read the file.
+        /// Read the file, replacing any instruments the bank held.
         /// </summary>
         /// <param name="r">The reader.</param>
         public override void Read(FileReader r) {
+            Instruments = new List<Instrument>();
 
             //Open block.
             r.OpenFile<NHeader>(out _);
